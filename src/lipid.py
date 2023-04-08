@@ -25,7 +25,7 @@ from subprocess import PIPE
 try:
     from lxml import etree
 except: pass
-from pymbar import pymbar
+import pymbar
 import itertools
 from collections import defaultdict, namedtuple, OrderedDict
 import csv

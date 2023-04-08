@@ -890,7 +890,7 @@ class GMX(Engine):
 
         edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % self.name, options=min_opts)
 
-        self.warngmx("grompp -c %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (self.name, self.name, self.name, self.name))
+        self.warngmx("grompp -c %s.gro -r %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (self.name, self.name, self.name, self.name, self.name))
         self.callgmx("mdrun -deffnm %s-min -nt 1" % self.name)
         # self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.gro -ndec 9" % (self.name, self.name, self.name), stdin="System")
         self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.g96" % (self.name, self.name, self.name), stdin="System")
