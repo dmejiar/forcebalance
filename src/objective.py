@@ -19,7 +19,7 @@ from forcebalance.output import getLogger
 logger = getLogger(__name__)
 
 try:
-    from forcebalance.gmxio import AbInitio_GMX, BindingEnergy_GMX, Liquid_GMX, Lipid_GMX, Interaction_GMX, Moments_GMX, Vibration_GMX, Thermo_GMX
+    from forcebalance.gmxio import AbInitio_GMX, BindingEnergy_GMX, Liquid_GMX, Lipid_GMX, Interaction_GMX, Moments_GMX, Vibration_GMX, Thermo_GMX, TorsionProfile_GMX
 except:
     logger.warning(traceback.format_exc())
     logger.warning("Gromacs module import failed\n")
@@ -125,6 +125,7 @@ Implemented_Targets = {
     'OPTGEOTARGET_SMIRNOFF': OptGeoTarget_SMIRNOFF,     # Keeping these two for compatibility with released FB calculation files.
     'TORSIONPROFILE_OPENMM': TorsionProfileTarget_OpenMM,
     'TORSIONPROFILE_SMIRNOFF': TorsionProfileTarget_SMIRNOFF,
+    'TORSIONPROFILE_GMX': TorsionProfile_GMX,
     'EVALUATOR_SMIRNOFF': Evaluator_SMIRNOFF,
     'RECHARGE_SMIRNOFF': Recharge_SMIRNOFF,
     'REMOTE_TARGET':RemoteTarget,

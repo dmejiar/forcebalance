@@ -26,6 +26,7 @@ from forcebalance.moments import Moments
 from forcebalance.vibration import Vibration
 from forcebalance.molecule import Molecule
 from forcebalance.thermo import Thermo
+from forcebalance.torsion_profile import TorsionProfileTarget as TorsionProfile
 from copy import deepcopy
 from forcebalance.qchemio import QChem_Dielectric_Energy
 import itertools
@@ -599,7 +600,7 @@ class GMX(Engine):
 
         self.gmx_defs = OrderedDict([("integrator", "md"), ("dt", "0.001"), ("nsteps", "0"),
                                      ("nstxout", "0"), ("nstfout", "0"), ("nstenergy", "1"), 
-                                     ("nstxtcout", "0"), ("constraints", "none"), ("cutoff-scheme", "group")])
+                                     ("nstxtcout", "0"), ("constraints", "none"), ("cutoff-scheme", "Verlet")])
         gmx_opts = OrderedDict([])
         warnings = []
         self.pbc = pbc
@@ -646,14 +647,14 @@ class GMX(Engine):
                 warn_press_key("Not using PBC, your provided nonbonded_cutoff will not be used")
             if 'vdw_cutoff' in kwargs:
                 warn_press_key("Not using PBC, your provided vdw_cutoff will not be used")
-            gmx_opts["pbc"] = "no"
-            self.gmx_defs["ns_type"] = "simple"
-            self.gmx_defs["nstlist"] = 0
-            self.gmx_defs["rlist"] = "0.0"
+            gmx_opts["pbc"] = "xyz"
+            self.gmx_defs["ns_type"] = "grid"
+            self.gmx_defs["nstlist"] = 1
+            self.gmx_defs["rlist"] = "2.0"
             self.gmx_defs["coulombtype"] = "cut-off"
-            self.gmx_defs["rcoulomb"] = "0.0"
+            self.gmx_defs["rcoulomb"] = "2.0"
             self.gmx_defs["vdwtype"] = "cut-off"
-            self.gmx_defs["rvdw"] = "0.0"
+            self.gmx_defs["rvdw"] = "2.0"
         
         ## Link files into the temp directory.
         if self.top is not None:
@@ -871,7 +872,7 @@ class GMX(Engine):
                     except: pass
         return energyterms
 
-    def optimize(self, shot, crit=1e-4, align=True, **kwargs):
+    def optimize(self, shot, crit=10.0, align=True, **kwargs):
         
         """ Optimize the geometry and align the optimized geometry to the starting geometry. """
 
@@ -882,12 +883,10 @@ class GMX(Engine):
             min_opts = kwargs["min_opts"]
         else:
             # algorithm = "steep"
-            if self.have_constraints:
-                algorithm = "steep"
-            else:
-                algorithm = "l-bfgs"
+            algorithm = "steep"
+
             # Arguments for running minimization.
-            min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1}
+            min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1, "emstep" : 0.1, "define" : "-DPOSRES"}
 
         edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % self.name, options=min_opts)
 
@@ -899,7 +898,7 @@ class GMX(Engine):
         
         E = float(open("%s-min-e.xvg" % self.name).readlines()[-1].split()[1])
         M = Molecule("%s.gro" % self.name, build_topology=False) + Molecule("%s-min.g96" % self.name)
-        if not self.pbc:
+        if not self.pbc and align:
             M.align(center=False)
         rmsd = M.ref_rmsd(0)[1]
         M[1].write("%s-min.gro" % self.name)
@@ -1249,7 +1248,7 @@ class GMX(Engine):
 
         # In gromacs version 5, default cutoff scheme becomes verlet. 
         # Need to set to group for backwards compatibility
-        md_defs["cutoff-scheme"] = 'group'
+        md_defs["cutoff-scheme"] = 'Verlet'
         md_opts["nstenergy"] = nsave
         md_opts["nstcalcenergy"] = nsave
         md_opts["nstxout"] = nsave
@@ -1649,3 +1648,13 @@ class Thermo_GMX(Thermo):
         self.scripts = ['gmxprefix.bash', 'md_chain.py']
         ## Initialize base class.
         super(Thermo_GMX,self).__init__(options,tgt_opts,forcefield)
+
+class TorsionProfile_GMX(TorsionProfile):
+    """ Subclass of TorsionProfile using GROMACS. """
+    def __init__(self,options,tgt_opts,forcefield):
+        self.set_option(tgt_opts,'coords',default='all.gro')
+        self.set_option(tgt_opts,'gmx_top',default='topol.top')
+        self.set_option(tgt_opts,'gmx_mdp',default='shot.mdp')
+        self.engine_ = GMX
+        super(TorsionProfile_GMX,self).__init__(options,tgt_opts,forcefield)
+

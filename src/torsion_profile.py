@@ -131,7 +131,7 @@ class TorsionProfileTarget(Target):
                 else:
                     M_opts += M_opt
             compute.emm = np.array(compute.emm)
-            compute.emm -= compute.emm[self.smin]
+            compute.emm -= np.min(compute.emm)
             compute.rmsd = np.array(compute.rmsd)
             if indicate:
                 if self.writelevel > 0:

@@ -866,7 +866,15 @@ class FF(forcebalance.BaseClass):
                     whites[fld] = whites[fld][:-1]
                 # Actually replace the field with the physical parameter value.
                 if precision == 12:
-                    newrd  = "% 17.12e" % (wval)
+                    elif fld == 4:
+                        newrd = "% 8.1f" % (wval)
+                    elif fld == 5:
+                        newrd = "% 4.1f" % (wval)
+                    elif fld == 6:
+                        newrd = "% 8.5f" % (wval)
+                    else:
+                        newrd  = "% 17.12e" % (wval)
+
                 else:
                     newrd  = TXTFormat(wval, precision)
                 # The new word might be longer than the old word.
