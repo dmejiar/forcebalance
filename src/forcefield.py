@@ -866,7 +866,7 @@ class FF(forcebalance.BaseClass):
                     whites[fld] = whites[fld][:-1]
                 # Actually replace the field with the physical parameter value.
                 if precision == 12:
-                    elif fld == 4:
+                    if fld == 4:
                         newrd = "% 8.1f" % (wval)
                     elif fld == 5:
                         newrd = "% 4.1f" % (wval)
