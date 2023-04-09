@@ -21,7 +21,7 @@ import subprocess
 #| doc/api_header.tex              |#
 #| bin/ForceBalance.py             |#
 #===================================#
-__version__ = "v1.9.5"
+__version__ = "1.9.5"
 try:
     # use git to find current version
     git_describe = subprocess.check_output(["git", "describe", "--tags"]).strip()
