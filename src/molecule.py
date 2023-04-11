@@ -1371,6 +1371,9 @@ class Molecule(object):
             self.Data[key] = value
         return super(Molecule,self).__setattr__(key, value)
 
+    def __setstate__(self, data):
+        self.__dict__.update(data)
+
     def __deepcopy__(self, memo):
         """ Custom deepcopy method because Python 3.6 appears to have changed its behavior """
         New = Molecule()

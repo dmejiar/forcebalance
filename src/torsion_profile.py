@@ -126,7 +126,9 @@ class TorsionProfileTarget(Target):
                 results = pool.map(self.engine.optimize, range(self.ns))
                 compute.emm = [result[0] for result in results]
                 compute.rmsd = [result[1] for result in results]
-                M_opts = [deepcopy(result[2]) for result in results]
+                M_opts = deepcopy(result[0][2])
+                for result in results[1:]:
+                    M_opts += result[2]
             compute.emm = np.array(compute.emm)
             compute.emm -= np.min(compute.emm)
             compute.rmsd = np.array(compute.rmsd)

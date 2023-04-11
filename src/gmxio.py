@@ -875,9 +875,7 @@ class GMX(Engine):
     def optimize(self, shot, crit=10.0, align=True, **kwargs):
         
         """ Optimize the geometry and align the optimized geometry to the starting geometry. """
-        from os import getpid
-
-        name = self.name + "-" + str(getpid())
+        name = self.name + "-" + str(os.getpid())
         ## Write the correct conformation.
         self.mol[shot].write("%s.gro" % name)
            
