@@ -117,18 +117,28 @@ class TorsionProfileTarget(Target):
         Answer = {'X':0.0, 'G':np.zeros(self.FF.np), 'H':np.zeros((self.FF.np, self.FF.np))}
         self.PrintDict = OrderedDict()
 
-        def compute(mvals_, indicate=False):
+        def compute(mvals_, indicate=False, pool=None):
             self.FF.make(mvals_)
             M_opts = None
             compute.emm = []
             compute.rmsd = []
-            with Pool() as pool:
+            if pool is not None:
                 results = pool.map(self.engine.optimize, range(self.ns))
                 compute.emm = [result[0] for result in results]
                 compute.rmsd = [result[1] for result in results]
                 M_opts = deepcopy(results[0][2])
                 for result in results[1:]:
                     M_opts += result[2]
+            else:
+                for i in range(self.ns):
+                    energy, rmsd, M_opt = self.engine.optimize(shot=i, align=False)
+                    # Create a molecule object to hold the MM-optimized structures
+                    compute.emm.append(energy)
+                    compute.rmsd.append(rmsd)
+                    if M_opts is None:
+                        M_opts = deepcopy(M_opt)
+                    else:
+                        M_opts += M_opt
             compute.emm = np.array(compute.emm)
             compute.emm -= np.min(compute.emm)
             compute.rmsd = np.array(compute.rmsd)
@@ -167,22 +177,23 @@ class TorsionProfileTarget(Target):
         compute.emm = None
         compute.rmsd = None
 
-        V = compute(mvals, indicate=True)
+        with Pool() as pool:
+            V = compute(mvals, indicate=True, pool=pool)
 
-        Answer['X'] = np.dot(V,V)
+            Answer['X'] = np.dot(V,V)
 
-        # Energy RMSE
-        e_rmse = np.sqrt(np.dot(self.wts, (compute.emm - self.eqm)**2))
+            # Energy RMSE
+            e_rmse = np.sqrt(np.dot(self.wts, (compute.emm - self.eqm)**2))
 
-        self.PrintDict[self.name] = '%10s %10s    %6.3f - %-6.3f   % 6.3f - %-6.3f    %6.3f    %7.4f   % 7.4f' % (','.join(['%i' % i for i in self.metadata['torsion_grid_ids'][self.smin]]),
+            self.PrintDict[self.name] = '%10s %10s    %6.3f - %-6.3f   % 6.3f - %-6.3f    %6.3f    %7.4f   % 7.4f' % (','.join(['%i' % i for i in self.metadata['torsion_grid_ids'][self.smin]]),
                                                                                                                   ','.join(['%i' % i for i in self.metadata['torsion_grid_ids'][np.argmin(compute.emm)]]),
                                                                                                                   min(self.eqm), max(self.eqm), min(compute.emm), max(compute.emm), max(compute.rmsd), e_rmse, Answer['X'])
 
-        # compute gradients and hessian
-        dV = np.zeros((self.FF.np,len(V)))
-        if AGrad or AHess:
-            for p in self.pgrad:
-                dV[p,:], _ = f12d3p(fdwrap(compute, mvals, p), h = self.h, f0 = V)
+            # compute gradients and hessian
+            dV = np.zeros((self.FF.np,len(V)))
+            if AGrad or AHess:
+                for p in self.pgrad:
+                    dV[p,:], _ = f12d3p(fdwrap(compute, mvals, p, pool=pool), h = self.h, f0 = V)
 
         for p in self.pgrad:
             Answer['G'][p] = 2*np.dot(V, dV[p,:])
