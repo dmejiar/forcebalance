@@ -16,6 +16,7 @@ from forcebalance.molecule import Molecule
 from forcebalance.finite_difference import fdwrap, f12d3p, in_fd
 from forcebalance.output import getLogger
 from forcebalance.optimizer import Counter
+from multiprocessing import Pool
 logger = getLogger(__name__)
 
 class TorsionProfileTarget(Target):
@@ -121,15 +122,11 @@ class TorsionProfileTarget(Target):
             M_opts = None
             compute.emm = []
             compute.rmsd = []
-            for i in range(self.ns):
-                energy, rmsd, M_opt = self.engine.optimize(shot=i, align=False)
-                # Create a molecule object to hold the MM-optimized structures
-                compute.emm.append(energy)
-                compute.rmsd.append(rmsd)
-                if M_opts is None:
-                    M_opts = deepcopy(M_opt)
-                else:
-                    M_opts += M_opt
+            with Pool() as pool:
+                results = pool.map(self.engine.optimize, range(self.ns))
+                compute.emm = [result[0] for result in results]
+                compute.rmsd = [result[1] for result in results]
+                M_opts = [deepcopy(result[2]) for result in results]
             compute.emm = np.array(compute.emm)
             compute.emm -= np.min(compute.emm)
             compute.rmsd = np.array(compute.rmsd)

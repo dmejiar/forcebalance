@@ -875,9 +875,11 @@ class GMX(Engine):
     def optimize(self, shot, crit=10.0, align=True, **kwargs):
         
         """ Optimize the geometry and align the optimized geometry to the starting geometry. """
+        from os import getpid
 
+        name = self.name + "-" + str(getpid())
         ## Write the correct conformation.
-        self.mol[shot].write("%s.gro" % self.name)
+        self.mol[shot].write("%s.gro" % name)
            
         if "min_opts" in kwargs:
             min_opts = kwargs["min_opts"]
@@ -888,20 +890,19 @@ class GMX(Engine):
             # Arguments for running minimization.
             min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1, "emstep" : 0.1, "define" : "-DPOSRES"}
 
-        edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % self.name, options=min_opts)
+        edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % name, options=min_opts)
 
-        self.warngmx("grompp -c %s.gro -r %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (self.name, self.name, self.name, self.name, self.name))
-        self.callgmx("mdrun -deffnm %s-min -nt 1" % self.name)
+        self.warngmx("grompp -c %s.gro -r %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, self.name, name, name))
+        self.callgmx("mdrun -deffnm %s-min -nt 1" % name)
         # self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.gro -ndec 9" % (self.name, self.name, self.name), stdin="System")
-        self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.g96" % (self.name, self.name, self.name), stdin="System")
-        self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-e.xvg" % (self.name, self.name), stdin='Potential')
+        self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.g96" % (name, name, name), stdin="System")
+        self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-e.xvg" % (name, name), stdin='Potential')
         
-        E = float(open("%s-min-e.xvg" % self.name).readlines()[-1].split()[1])
-        M = Molecule("%s.gro" % self.name, build_topology=False) + Molecule("%s-min.g96" % self.name)
-        if not self.pbc and align:
-            M.align(center=False)
+        E = float(open("%s-min-e.xvg" % name).readlines()[-1].split()[1])
+        M = Molecule("%s.gro" % name, build_topology=False) + Molecule("%s-min.g96" % name)
+        M.align(center=False)
         rmsd = M.ref_rmsd(0)[1]
-        M[1].write("%s-min.gro" % self.name)
+        M[1].write("%s-min.gro" % name)
 
         return E / 4.184, rmsd, M[1]
 
