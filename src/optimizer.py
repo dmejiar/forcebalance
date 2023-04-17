@@ -988,6 +988,8 @@ class Optimizer(forcebalance.BaseClass):
                                           (fout.evals, np.linalg.norm(mvals), np.linalg.norm(mvals-self.xk_prev), color, X, X - self.x_prev) + foot)
                 Result = fin(mvals,Order=Order,verbose=False)
                 fout.evals += 1
+                self.iteration += 1
+                ITERATION += 1
                 X, G, H = [Result[i] for i in ['X','G','H']]
                 if callback:
                     if self.x_best is None or X <= self.x_best:
