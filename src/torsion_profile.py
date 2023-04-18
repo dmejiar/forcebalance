@@ -123,7 +123,7 @@ class TorsionProfileTarget(Target):
             compute.emm = []
             compute.rmsd = []
             if pool is not None:
-                results = pool.map(self.engine.optimize, range(self.ns))
+                results = pool.starmap(self.engine.optimize, zip(range(self.ns),self.metadata['torsion_grid_ids']))
                 compute.emm = [result[0] for result in results]
                 compute.rmsd = [result[1] for result in results]
                 M_opts = deepcopy(results[0][2])
@@ -131,7 +131,7 @@ class TorsionProfileTarget(Target):
                     M_opts += result[2]
             else:
                 for i in range(self.ns):
-                    energy, rmsd, M_opt = self.engine.optimize(shot=i, align=False)
+                    energy, rmsd, M_opt = self.engine.optimize(i, self.metadata['torsion_grid_ids'][i], align=False)
                     # Create a molecule object to hold the MM-optimized structures
                     compute.emm.append(energy)
                     compute.rmsd.append(rmsd)

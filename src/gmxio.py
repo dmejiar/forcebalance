@@ -33,6 +33,7 @@ import itertools
 from collections import defaultdict, OrderedDict
 import traceback
 import random
+import fileinput
 #import IPython
 
 from forcebalance.output import getLogger
@@ -872,12 +873,12 @@ class GMX(Engine):
                     except: pass
         return energyterms
 
-    def optimize(self, shot, crit=10.0, align=True, **kwargs):
+    def optimize(self, shot, dihedral, crit=10.0, align=True, **kwargs):
         
         """ Optimize the geometry and align the optimized geometry to the starting geometry. """
-        name = self.name + "-" + str(os.getpid())
+        name = self.name + "_" + str(shot)
         ## Write the correct conformation.
-        self.mol[shot].write("%s.gro" % name)
+        self.mol[shot].write("%s.g96" % name)
            
         if "min_opts" in kwargs:
             min_opts = kwargs["min_opts"]
@@ -886,21 +887,27 @@ class GMX(Engine):
             algorithm = "steep"
 
             # Arguments for running minimization.
-            min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1, "emstep" : 0.1, "define" : "-DPOSRES"}
+            min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1, "emstep" : 0.1, "define" : "-DDIHRES"}
 
         edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % name, options=min_opts)
+        
+        with open(f"{self.name}.top","r") as fhin:
+            with open(f"{name}.top","w") as fhout:
+                for line in fhin:
+                    line.replace("@chival@",str(dihedral))
+                    print(line, file=fhout)
 
-        self.warngmx("grompp -c %s.gro -r %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, self.name, name, name))
+        self.warngmx("grompp -c %s.g96 -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name, name))
         self.callgmx("mdrun -deffnm %s-min -nt 1" % name)
         # self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.gro -ndec 9" % (self.name, self.name, self.name), stdin="System")
         self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.g96" % (name, name, name), stdin="System")
         self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-e.xvg" % (name, name), stdin='Potential')
         
         E = float(open("%s-min-e.xvg" % name).readlines()[-1].split()[1])
-        M = Molecule("%s.gro" % name, build_topology=False) + Molecule("%s-min.g96" % name)
+        M = Molecule("%s.g96" % name, build_topology=False) + Molecule("%s-min.g96" % name)
         M.align(center=False)
         rmsd = M.ref_rmsd(0)[1]
-        M[1].write("%s-min.gro" % name)
+        M[1].write("%s-min.g96" % name)
 
         return E / 4.184, rmsd, M[1]
 
