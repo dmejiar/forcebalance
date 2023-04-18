@@ -123,7 +123,8 @@ class TorsionProfileTarget(Target):
             compute.emm = []
             compute.rmsd = []
             if pool is not None:
-                results = pool.starmap(self.engine.optimize, zip(range(self.ns),self.metadata['torsion_grid_ids']))
+                torsions = [torsion for sublist in self.metadata['torsion_grid_ids'] for torsion in sublist]
+                results = pool.starmap(self.engine.optimize, zip(range(self.ns),torsions))
                 compute.emm = [result[0] for result in results]
                 compute.rmsd = [result[1] for result in results]
                 M_opts = deepcopy(results[0][2])

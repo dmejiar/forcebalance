@@ -873,7 +873,7 @@ class GMX(Engine):
                     except: pass
         return energyterms
 
-    def optimize(self, shot, dihedral, crit=10.0, align=True, **kwargs):
+    def optimize(self, shot, dihedral=None, crit=10.0, align=True, **kwargs):
         
         """ Optimize the geometry and align the optimized geometry to the starting geometry. """
         name = self.name + "_" + str(shot)
@@ -891,11 +891,12 @@ class GMX(Engine):
 
         edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % name, options=min_opts)
         
-        with open(f"{self.name}.top","r") as fhin:
-            with open(f"{name}.top","w") as fhout:
-                for line in fhin:
-                    line.replace("@chival@",str(dihedral))
-                    print(line, file=fhout)
+        if dihedral is not None:
+            with open(f"{self.name}.top","r") as fhin:
+                with open(f"{name}.top","w") as fhout:
+                    for line in fhin:
+                        line.replace("@chival@",str(dihedral))
+                        print(line, file=fhout)
 
         self.warngmx("grompp -c %s.g96 -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name, name))
         self.callgmx("mdrun -deffnm %s-min -nt 1" % name)
