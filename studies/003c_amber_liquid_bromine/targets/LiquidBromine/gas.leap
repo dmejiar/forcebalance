@@ -1,8 +1,0 @@
-loadamberparams bro.frcmod
-BRO = loadmol2 bro.mol2
-
-model = loadpdb gas.pdb
-
-saveamberparm model gas.prmtop gas.inpcrd
-
-quit
