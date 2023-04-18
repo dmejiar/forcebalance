@@ -572,7 +572,7 @@ def format_gro_coord(resid, resname, aname, seqno, xyz):
     @param[in] xyz A 3-element array containing x, y, z coordinates of that atom
 
     """
-    return "%5i%-5s%5s%5i% 8.3f% 8.3f% 8.3f" % (resid,resname,aname,seqno,xyz[0],xyz[1],xyz[2])
+    return "%5i%-5s%5s%5i% 11.6f% 11.6f% 11.6f" % (resid,resname,aname,seqno,xyz[0],xyz[1],xyz[2])
 
 def format_xyzgen_coord(element,xyzgen):
     """ Print a line consisting of (element, p, q, r, s, t, ...) where
@@ -2043,6 +2043,7 @@ class Molecule(object):
         # Run algorithm to determine bonds.
         # Decide if we want to use the grid algorithm.
         use_grid = toppbc or (np.min([xext, yext, zext]) > 2.0*gsz)
+        use_grid = False
         if use_grid:
             # Inside the grid algorithm.
             # 1) Determine the left edges of the grid cells.
@@ -3395,6 +3396,11 @@ class Molecule(object):
         comms    = []
         boxes    = []
         xyz      = []
+        resid    = []
+        resname  = []
+        elem     = []
+        atomname = []
+        frame    = 0
         read_mode = 'None'
         for line in open(fnm):
             sline = line.split()
@@ -3410,7 +3416,9 @@ class Molecule(object):
                     xyzs.append(np.array(xyz))
                     xyz = []
                 elif read_mode == 'TITLE':
-                    comms.append(title)
+                    comms.append(title.strip())
+                elif read_mode == 'BOX':
+                    frame += 1
                 read_mode = 'None'
             elif read_mode == 'BOX' and len(sline) > 0:
                 # Read box information (should be on a single line)
@@ -3429,16 +3437,39 @@ class Molecule(object):
                     v3 = np.array([box[7], box[8], box[2]])
                     boxes.append(BuildLatticeFromVectors(v1, v2, v3))
             elif read_mode == 'POSITION' and len(sline) > 0:
-                xyz.append([float(i)*10 for i in sline])
+                if len(sline) > 3:
+                    xyz.append([float(i)*10 for i in sline[4:]])
+                    if frame == 0:
+                        thisresid = int(sline[0])
+                        thisresname = sline[1]
+                        thisatomname = sline[2]
+                        resid.append(thisresid)
+                        resname.append(thisresname)
+                        atomname.append(thisatomname)
+                        thiselem = sline[2]
+                        if len(thiselem) > 1:
+                            thiselem = thiselem[0] + re.sub('[A-Z0-9]','',thiselem[1:])
+                        elem.append(thiselem)
+                else:
+                    xyz.append([float(i)*10 for i in sline])
             elif read_mode == 'TITLE':
                 title = line.strip()
         if len(xyzs) != len(boxes):
             raise IOError('in read_g96: xyzs and boxes should have the same length')
         if len(xyzs) != len(comms):
             raise IOError('in read_g96: xyzs and comms should have the same length')
-        Answer = {'xyzs'     : xyzs,
-                  'boxes'    : boxes,
-                  'comms'    : comms}
+        if len(atomname) > 0:
+            Answer = {'xyzs'     : xyzs,
+                      'elem'     : elem,
+                      'atomname' : atomname,
+                      'resid'    : resid,
+                      'resname'  : resname,
+                      'boxes'    : boxes,
+                      'comms'    : comms}
+        else:
+            Answer = {'xyzs'     : xyzs,
+                      'boxes'    : boxes,
+                      'comms'    : comms}
         return Answer
 
     def read_charmm(self, fnm, **kwargs):

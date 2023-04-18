@@ -878,7 +878,7 @@ class GMX(Engine):
         """ Optimize the geometry and align the optimized geometry to the starting geometry. """
         name = self.name + "_" + str(shot)
         ## Write the correct conformation.
-        self.mol[shot].write("%s.g96" % name)
+        self.mol[shot].write("%s.gro" % name)
            
         if "min_opts" in kwargs:
             min_opts = kwargs["min_opts"]
@@ -895,20 +895,25 @@ class GMX(Engine):
             with open(f"{self.name}.top","r") as fhin:
                 with open(f"{name}.top","w") as fhout:
                     for line in fhin:
-                        line.replace("@chival@",str(dihedral))
-                        print(line, file=fhout)
+                        resline = line.replace("@chival@",str(dihedral))
+                        print(resline, file=fhout, end="")
 
-        self.warngmx("grompp -c %s.g96 -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name, name))
+        self.warngmx("grompp -c %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name))
         self.callgmx("mdrun -deffnm %s-min -nt 1" % name)
+        self.warngmx("grompp -c %s.gro -t %s-min.trr -p %s.top -f %s-min.mdp -o %s-min2.tpr" % (name, name, name, name, name))
+        self.callgmx("mdrun -deffnm %s-min2 -nt 1" % name)
         # self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.gro -ndec 9" % (self.name, self.name, self.name), stdin="System")
-        self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.g96" % (name, name, name), stdin="System")
+        self.callgmx("trjconv -f %s-min2.trr -s %s-min2.tpr -o %s-min.g96" % (name, name, name), stdin="System")
         self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-e.xvg" % (name, name), stdin='Potential')
+        self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-res.xvg" % (name, name), stdin='Dih.-Res')
         
         E = float(open("%s-min-e.xvg" % name).readlines()[-1].split()[1])
+        res = float(open("%s-min-res.xvg" % name).readlines()[-1].split()[1])
+        E -= res
         M = Molecule("%s.g96" % name, build_topology=False) + Molecule("%s-min.g96" % name)
         M.align(center=False)
         rmsd = M.ref_rmsd(0)[1]
-        M[1].write("%s-min.g96" % name)
+        M[1].write("%s-min.gro" % name)
 
         return E / 4.184, rmsd, M[1]
 
