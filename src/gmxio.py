@@ -910,7 +910,7 @@ class GMX(Engine):
         E = float(open("%s-min-e.xvg" % name).readlines()[-1].split()[1])
         res = float(open("%s-min-res.xvg" % name).readlines()[-1].split()[1])
         E -= res
-        M = Molecule("%s.g96" % name, build_topology=False) + Molecule("%s-min.g96" % name)
+        M = Molecule("%s.gro" % name, build_topology=False) + Molecule("%s-min.g96" % name)
         M.align(center=False)
         rmsd = M.ref_rmsd(0)[1]
         M[1].write("%s-min.gro" % name)
