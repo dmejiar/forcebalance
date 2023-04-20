@@ -887,7 +887,7 @@ class GMX(Engine):
             algorithm = "steep"
 
             # Arguments for running minimization.
-            min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1, "emstep" : 0.1, "define" : "-DDIHRES"}
+            min_opts = {"integrator" : algorithm, "emtol" : crit, "nstxout" : 0, "nstfout" : 0, "nsteps" : 10000, "nstenergy" : 1, "emstep" : 0.1, "define" : "-DDIHRES -DPOSRES"}
 
         edit_mdp(fin="%s.mdp" % self.name, fout="%s-min.mdp" % name, options=min_opts)
         
@@ -898,12 +898,12 @@ class GMX(Engine):
                         resline = line.replace("@chival@",str(dihedral))
                         print(resline, file=fhout, end="")
 
-        self.warngmx("grompp -c %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name))
+        self.warngmx("grompp -c %s.gro -r %s.gro -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name, name))
         self.callgmx("mdrun -deffnm %s-min -nt 1" % name)
-        self.warngmx("grompp -c %s.gro -t %s-min.trr -p %s.top -f %s-min.mdp -o %s-min2.tpr" % (name, name, name, name, name))
-        self.callgmx("mdrun -deffnm %s-min2 -nt 1" % name)
+        self.warngmx("grompp -c %s-min.gro -r %s.gro -t %s-min.trr -p %s.top -f %s-min.mdp -o %s-min.tpr" % (name, name, name, name, name, name))
+        self.callgmx("mdrun -deffnm %s-min -nt 1" % name)
         # self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.gro -ndec 9" % (self.name, self.name, self.name), stdin="System")
-        self.callgmx("trjconv -f %s-min2.trr -s %s-min2.tpr -o %s-min.g96" % (name, name, name), stdin="System")
+        self.callgmx("trjconv -f %s-min.trr -s %s-min.tpr -o %s-min.g96" % (name, name, name), stdin="System")
         self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-e.xvg" % (name, name), stdin='Potential')
         self.callgmx("g_energy -xvg no -f %s-min.edr -o %s-min-res.xvg" % (name, name), stdin='Dih.-Res')
         

@@ -517,7 +517,7 @@ class Optimizer(forcebalance.BaseClass):
                     self.set_goodstep(0)
                     print_progress(ITERATION, nxk, ndx, ngd, "\x1b[91m", X, X-X_prev, Quality)
                     xk = xk_prev.copy()
-                    trust = max(ndx*(1./(1+self.adapt_fac)), self.mintrust)
+                    trust = max(trust*(1./(1+self.adapt_fac)), self.mintrust)
                     trustprint = "Reducing trust radius to % .4e\n" % trust
                     if self.uncert:
                         #================================#
@@ -557,10 +557,10 @@ class Optimizer(forcebalance.BaseClass):
                         #|    and take a reduced step.  |#
                         #================================#
                         printcool("Objective function rises!\nTaking another step from previous point..",color=1)
-                        X = X_prev
-                        G = G_prev.copy()
-                        H = H_stor.copy()
-                        data = deepcopy(datastor)
+                        #X = X_prev
+                        #G = G_prev.copy()
+                        #H = H_stor.copy()
+                        #data = deepcopy(datastor)
                 else:
                     self.set_goodstep(1)
                     #================================#
@@ -568,7 +568,7 @@ class Optimizer(forcebalance.BaseClass):
                     #|         step quality.        |#
                     #================================#
                     if Quality <= ThreLQ and self.trust0 > 0:
-                        trust = max(ndx*(1./(1+self.adapt_fac)), self.mintrust)
+                        trust = max(trust*(1./(1+self.adapt_fac)), self.mintrust)
                         trustprint = "Low quality step, reducing trust radius to % .4e\n" % trust
                     elif Quality >= ThreHQ and bump and self.trust0 > 0:
                         curr_trust = trust
@@ -797,6 +797,32 @@ class Optimizer(forcebalance.BaseClass):
                     if np.dot(ddx, ddx) > 1e-16:
                         self._compute(dx)
                     return self.Hess
+            def hyper_daniel(L):
+                dx0 = np.zeros(len(xkd))
+                HL = H + (L-1)*np.eye(len(H))
+                HYP = Hyper(HL, self.Objective.Penalty)
+                # cProfile.runctx('HYP._compute(dx0)', globals={}, locals={'HYP': HYP, 'dx0': dx0})
+                # sys.exit()
+                
+                t0 = time.time()
+                # Opt1 = optimize.fmin_bfgs(HYP.compute_val,dx0,fprime=HYP.compute_grad,gtol=1e-5*np.sqrt(len(dx0)),full_output=True,disp=1)
+                # Opt1 = optimize.fmin_l_bfgs_b(HYP.compute_val,dx0,fprime=HYP.compute_grad,m=30,factr=1e7,pgtol=1e-4,iprint=0,disp=1,maxfun=1e5,maxiter=1e5)        
+                Opt1 = optimize.fmin_l_bfgs_b(HYP.compute_val,dx0,fprime=HYP.compute_grad,m=30,factr=1e7,pgtol=1e-4,iprint=-1,disp=0,maxfun=1e5,maxiter=1e5)         
+                logger.info("%.3f s (L-BFGS 1) ", time.time() - t0)
+                
+                t0 = time.time()
+                # Opt2 = optimize.fmin_bfgs(HYP.compute_val,-xkd,fprime=HYP.compute_grad,gtol=1e-5*np.sqrt(len(dx0)),full_output=True,disp=1)
+                # Opt2 = optimize.fmin_l_bfgs_b(HYP.compute_val,-xkd,fprime=HYP.compute_grad,m=30,factr=1e7,pgtol=1e-4,iprint=0,disp=1,maxfun=1e5,maxiter=1e5)       
+                Opt2 = optimize.fmin_l_bfgs_b(HYP.compute_val,-xkd,fprime=HYP.compute_grad,m=30,factr=1e7,pgtol=1e-4,iprint=-1,disp=0,maxfun=1e5,maxiter=1e5)        
+                logger.info("%.3f s (L-BFGS 2) ", time.time() - t0)
+                
+                dx1, sol1 = Opt1[0], Opt1[1]
+                dx2, sol2 = Opt2[0], Opt2[1]
+                dxb, sol = (dx1, sol1) if sol1 <= sol2 else (dx2, sol2)
+                for i in self.excision:    # Reinsert deleted coordinates - don't take a step in those directions
+                    dxb = np.insert(dxb, i, 0)
+                return dxb, sol
+
             def hyper_solver(L):
                 dx0 = np.zeros(len(xkd))
                 HL = H + (L-1)**2*np.eye(len(H))
@@ -863,9 +889,31 @@ class Optimizer(forcebalance.BaseClass):
                 for i in self.excision:    # Reinsert deleted coordinates - don't take a step in those directions
                     dx = np.insert(dx, i, 0)
                 return dx, sol
+            def para_solver_daniel(L):
+                # Levenberg-Marquardt
+                # HT = H + (L-1)**2*np.diag(np.diag(H))
+                # Attempt to use plain Levenberg
+                HT = H + (L-1)*np.eye(len(H))
+                logger.debug("Inverting Scaled Hessian:\n")
+                logger.debug(" G:\n")
+                pvec1d(G,precision=5, loglevel=DEBUG)
+                logger.debug(" HT: (Scal = %.4f)\n" % (1+(L-1)**2))
+                pmat2d(HT,precision=5, loglevel=DEBUG)
+                Hi = invert_svd(HT)
+                dx = flat(-1 * np.dot(Hi, col(G)))
+                logger.debug(" dx:\n")
+                pvec1d(dx,precision=5, loglevel=DEBUG)
+                sol = flat(0.5*multi_dot([row(dx), H, col(dx)]))[0] + np.dot(dx,G)
+                for i in self.excision:    # Reinsert deleted coordinates - don't take a step in those directions
+                    dx = np.insert(dx, i, 0)
+                return dx, sol
+
     
         def solver(L):
             return hyper_solver(L) if self.bhyp else para_solver(L)
+
+        def solver_daniel(L):
+            return hyper_daniel(L) if self.bhyp else para_solver_daniel(L)
     
         def trust_fun(L):
             N = np.linalg.norm(solver(L)[0])
@@ -893,25 +941,81 @@ class Optimizer(forcebalance.BaseClass):
             logger.info("Hessian diagonal search: H%+.4f*I, length %.4e, result % .4e\n" % ((L-1)**2,np.linalg.norm(dx),Result))
             search_fun.micro += 1
             return Result
+
+        def search_fun_daniel(L):
+            # Evaluate ONLY the objective function.  Most useful when
+            # the objective is cheap, but the derivative is expensive.
+            dx, sol = solver_daniel(L) # dx is how much the step changes from the previous step.
+            # This is our trial step.
+            xk_ = dx + xk
+            Result = self.Objective.Full(xk_,0,verbose=False,customdir="micro_%02i" % search_fun.micro)['X'] - data['X']
+
+            for Tgt in self.Objective.Targets:
+                Tgt.remove_custom_dir("micro_%02i" % search_fun.micro)
+
+            logger.info("Hessian diagonal search: H%+.4f*I, length %.4e, result % .4e\n" % ((L-1)**2,np.linalg.norm(dx),Result))
+            search_fun.micro += 1
+            return Result
+
+        def lmstep(L,scal):
+            dx, sol = solver_daniel(L)
+            dx *= scal
+
+            xk_ = dx + xk
+            Result = data['X'] - self.Objective.Full(xk_,0,verbose=False,customdir="micro_%02i" % lmstep.micro)['X']
+
+            for Tgt in self.Objective.Targets:
+                Tgt.remove_custom_dir("micro_%02i" % lmstep.micro)
+
+            denom = (L-1)*np.dot(dx,dx)
+            denom -= 0.5*np.dot(G,dx)
+
+            rho = Result/np.abs(denom)
+
+            logger.info("Hessian diagonal search: H%+.4f*I, length %.4e, rho % .4f, real %+.4f\n" % ((L-1),np.linalg.norm(dx),rho, -Result))
+            lmstep.micro += 1
+            return rho,-Result
+
+        lmstep.micro = 0
         search_fun.micro = 0
         
         if self.trust0 > 0: # This is the trust region code.
             bump = False
-            dx, expect = solver(1)
-            dxnorm = np.linalg.norm(dx)
-            if dxnorm > trust:
-                bump = True
-                # Tried a few optimizers here, seems like Brent works well.
-                # Okay, the problem with Brent is that the tolerance is fractional.  
-                # If the optimized value is zero, then it takes a lot of meaningless steps.
-                LOpt = optimize.brent(trust_fun,brack=(self.lmg,self.lmg*4),tol=1e-6)
-                ### Result = optimize.fmin_powell(trust_fun,3,xtol=self.search_tol,ftol=self.search_tol,full_output=1,disp=0)
-                ### LOpt = Result[0]
-                dx, expect = solver(LOpt)
-                dxnorm = np.linalg.norm(dx)
-                logger.info("Trust-radius step found (length %.4e), % .4e added to Hessian diagonal\n" % (dxnorm, (LOpt-1)**2))
+            scal = 1.0
+            rho, expect = lmstep(self.lmg,scal)
+            if rho > 0.0:
+                while True:
+                    rho2, expect2 = lmstep(self.lmg,scal*0.95)
+                    if expect2 < expect:
+                        scal *= 0.95
+                        rho = rho2
+                        expect = expect2
+                    else:
+                        break
+                if lmstep.micro == 2:
+                    while True:
+                        rho2, expect2 = lmstep(self.lmg,scal*1.05)
+                        if expect2 < expect:
+                            scal *= 1.05
+                            rho = rho2
+                            expect = expect2
+                        else:
+                            break
+                dx, _ = solver_daniel(self.lmg)
+                dx *= scal
+                if rho >= 0.2:
+                    self.lmg = max((self.lmg-1.0)/6.0,0.0) + 1.0
             else:
-                logger.info("Newton-Raphson step found (length %.4e)\n" % (dxnorm))
+                scal = 1.0
+                search_fun.micro = 0
+                Result = optimize.fminbound(search_fun_daniel,self.lmg,self.lmg*7,xtol=0.08,full_output=1)
+                if Result[1] > 0:
+                    Result = optimize.fminbound(search_fun_daniel,Result[0],Result[0]*7,xtol=0.08,full_output=1)
+                self.lmg = Result[0]
+                expect = Result[1]
+                dx, _ = solver_daniel(self.lmg)
+            dxnorm = np.linalg.norm(dx)
+            logger.info("Length: %+.4f   Levenberg: %+.4f     Expect: %+.4f\n" % (dxnorm, self.lmg, expect))
                 
         else: # This is the search code.
             # First obtain a step that is roughly the same length as the provided trust radius.

@@ -1583,7 +1583,7 @@ def rs_override(rsfactors,termtype,Temperature=298.15):
     elif match('BONDSK|UREY_BRADLEYK2',termtype):
         # au bohr^-2
         rsfactors[termtype] = 34455.5275 * 27.2114
-    elif match('PDIHS[1-6]B|ANGLESB|UREY_BRADLEYB',termtype):
+    elif match('PDIHS[1-6]B|PDIHMULS[1-6]B|ANGLESB|UREY_BRADLEYB',termtype):
         # radian
         rsfactors[termtype] = 57.295779513
     elif match('VDWT|VDW_BHAMB|VPAIR_BHAMB',termtype):
